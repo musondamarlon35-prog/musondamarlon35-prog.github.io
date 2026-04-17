@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskEarn ZM - Earn Real Money</title>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6287650685364327"
+     crossorigin="anonymous"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, Arial; }
+        body { background: #f4f6f8; padding: 15px; }
+        .container { max-width: 480px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 16px; margin-bottom: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+        .balance { text-align: center; }
+        .balance h1 { font-size: 2.8rem; color: #16a34a; margin: 8px 0; }
+        .btn { width: 100%; padding: 16px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; }
+        .btn-green { background: linear-gradient(135deg, #2d7a2d, #4caf50); color: white; }
+        .btn-orange { background: #ea580c; color: white; }
+        .btn:disabled { background: #d1d5db; cursor: not-allowed; }
+        .task { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #f3f4f6; }
+        input[type="tel"] { 
+            width: 100%; 
+            padding: 14px; 
+            border: 2px solid #e1e5e9; 
+            border-radius: 8px; 
+            margin-bottom: 15px; 
+            font-size: 16px; 
+            box-sizing: border-box;
+            background: white;
+            color: #333;
+        }
+        .hidden { display: none; }
+        .footer { text-align: center; margin-top: 20px; font-size: 14px; color: #6b7280; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="banner.png" style="width:100%; border-radius:16px; margin-bottom:15px;" alt="TaskEarn ZM">
+        
+        <div id="loginCard" class="card">
+            <input type="tel" id="loginPhone" placeholder="Enter phone number" maxlength="10">
+            <button class="btn btn-green" onclick="login()">Start Earning</button>
+        </div>
+
+        <div id="mainApp" class="hidden">
+            <div class="card balance">
+                <p>Hi <span id="userPhone"></span></p>
+                <h1>K<span id="balance">0.00</span></h1>
+                <p><span id="points">0</span> Points | 100 points = K1</p>
+            </div>
+
+            <div class="card">
+                <button id="watchAdBtn" class="btn btn-green" onclick="watchAd()">▶ Watch Ad +10 Points</button>
+            </div>
+
+            <div class="card">
+                <h3>Daily Tasks</h3>
+                <div id="taskList"></div>
+            </div>
+
+            <div class="card">
+                <h3>Cash Out Min K5.00</h3>
+                <p style="font-size: 14px; color: #6b7280; margin-bottom: 10px;">Money sent to: <span id="cashoutPhone"></span></p>
+                <button id="cashoutBtn" class="btn btn-orange" onclick="requestCashout()" disabled>Request Cashout</button>
+                <div id="cashoutStatus" style="margin-top: 10px; font-size: 14px;"></div>
+            </div>
+
+            <div class="footer">
+                <p>No deposits needed. We pay you from ad revenue.</p>
+                <button style="background:none; border:none; color:#ea580c; margin-top:10px;" onclick="logout()">Logout</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const API_URL = 'https://your-backend-url.com';
+    let token = localStorage.getItem('token');
+    let user = null;
+
+    if (token) showApp();
+
+    async function login() {
+        const phone = document.getElementById('loginPhone').value;
+        if (phone.length !== 10) return alert('Enter valid 10-digit Zambian number');
+
+        const res = await fetch(`${API_URL}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone })
+        });
+        const data = await res.json();
+        token = data.token;
+        localStorage.setItem('token', token);
+        showApp();
+    }
+
+    async function showApp() {
+        const res = await fetch(`${API_URL}/me`, {
+            headers: { 'Authorization': token }
+        });
+        if (!res.ok) return logout();
+        user = await res.json();
+
+        document.getElementById('loginCard').classList.add('hidden');
+        document.getElementById('mainApp').classList.remove('hidden');
+        document.getElementById('userPhone').textContent = user.phone;
+        document.getElementById('cashoutPhone').textContent = user.phone;
+        updateUI();
+        loadTasks();
+    }
+
+    function updateUI() {
+        document.getElementById('points').textContent = user.points;
+        document.getElementById('balance').textContent = (user.points / 100).toFixed(2);
+        document.getElementById('cashoutBtn').disabled = user.points < 500;
+        document.getElementById('cashoutStatus').textContent = user.pendingCashout?
+            `Pending: K${(user.pendingCashout / 100).toFixed(2)} - Processing` : '';
+    }
+
+    async function watchAd() {
+        document.getElementById('watchAdBtn').disabled = true;
+        document.getElementById('watchAdBtn').textContent = 'Loading Ad...';
+
+        setTimeout(async () => {
+            const res = await fetch(`${API_URL}/reward/ad`, {
+                method: 'POST',
+                headers: { 'Authorization': token }
+            });
+            user = await res.json();
+            updateUI();
+            document.getElementById('watchAdBtn').disabled = false;
+            document.getElementById('watchAdBtn').textContent = '▶ Watch Ad +10 Points';
+        }, 3000);
+    }
+
+    async function loadTasks() {
+        const res = await fetch(`${API_URL}/tasks`, { headers: { 'Authorization': token } });
+        const tasks = await res.json();
+        const taskList = document.getElementById('taskList');
+        taskList.innerHTML = '';
+        tasks.forEach(t => {
+            taskList.innerHTML += `
+                <div class="task">
+                    <span>${t.title}</span>
+                    ${t.done? '<span style="color:#16a34a">✓ Done</span>' :
+                    `<button class="btn" style="width:auto; padding:8px 16px;" onclick="completeTask('${t.id}')">${t.points}</button>`}
+                </div>`;
+        });
+    }
+
+    async function completeTask(taskId) {
+        const res = await fetch(`${API_URL}/reward/task`, {
+            method: 'POST',
+            headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskId })
+        });
+        user = await res.json();
+        updateUI();
+        loadTasks();
+    }
+
+    async function requestCashout() {
+        if (user.points < 500) return;
+        const res = await fetch(`${API_URL}/cashout`, {
+            method: 'POST',
+            headers: { 'Authorization': token }
+        });
+        user = await res.json();
+        updateUI();
+    }
+
+    function logout() {
+        localStorage.removeItem('token');
+        location.reload();
+    }
+</script>
+</body>
+</html>
