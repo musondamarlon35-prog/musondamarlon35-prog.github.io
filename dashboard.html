@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskEarn ZM Dashboard</title>
+    <style>
+        * {margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+        body {background:#f5f5f5;color:#111}
+        .header {background:#4CAF50;color:#fff;padding:16px;text-align:center;font-weight:700;font-size:20px}
+        .tabs {display:flex;background:#fff;border-bottom:1px solid #ddd}
+        .tab {flex:1;padding:14px;text-align:center;font-weight:600;cursor:pointer}
+        .tab.active {color:#4CAF50;border-bottom:3px solid #4CAF50}
+        .content {padding:16px}
+        .card {background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 2px 4px rgba(0,0,0,.08)}
+        .btn {background:#4CAF50;color:#fff;border:0;padding:12px 16px;border-radius:8px;font-weight:600;cursor:pointer;width:100%}
+        .btn:disabled {background:#ccc}
+        input {width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;margin:8px 0}
+        #survey-container {min-height:400px}
+        .hidden {display:none}
+    </style>
+</head>
+<body>
+    <div class="header">TaskEarn ZM</div>
+    
+    <div id="auth-section">
+        <div class="content">
+            <div class="card">
+                <h3>Login / Sign Up</h3>
+                <input id="email" type="email" placeholder="Email">
+                <input id="password" type="password" placeholder="Password">
+                <button class="btn" onclick="login()">Login</button>
+                <button class="btn" style="background:#2196F3;margin-top:8px" onclick="signup()">Create Account</button>
+                <p id="auth-msg" style="color:red;margin-top:8px"></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-section" class="hidden">
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('home')">Home</div>
+            <div class="tab" onclick="showTab('surveys')">Surveys</div>
+            <div class="tab" onclick="showTab('wallet')">Wallet</div>
+        </div>
+
+        <div class="content">
+            <div id="home" class="tab-content">
+                <div class="card">
+                    <h3>Welcome to TaskEarn ZM</h3>
+                    <p>Logged in as: <b id="user-email"></b></p>
+                    <p>Complete surveys to earn K. Withdraw via MTN/Airtel Money.</p>
+                    <button class="btn" onclick="logout()" style="background:#f44336">Logout</button>
+                </div>
+            </div>
+
+            <div id="surveys" class="tab-content hidden">
+                <div class="card">
+                    <h3>Available Surveys</h3>
+                    <div id="survey-container">Loading surveys...</div>
+                </div>
+            </div>
+
+            <div id="wallet" class="tab-content hidden">
+                <div class="card">
+                    <h3>Your Balance</h3>
+                    <h1>K<span id="balance">0.00</span></h1>
+                    <input id="phone" placeholder="MTN/Airtel Number: 096xxxxxxx">
+                    <input id="amount" type="number" placeholder="Amount to withdraw (Min K10)">
+                    <button class="btn" onclick="withdraw()">Request Withdrawal</button>
+                    <p id="wd-msg" style="margin-top:8px"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Firebase SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // Your Firebase config - already plugged in
+        const firebaseConfig = {
+            apiKey: "AIzaSyCEDD3UF6ruce4Wc9V2WFgT0kNEu80EVsU",
+            authDomain: "taskearn-zm.firebaseapp.com",
+            projectId: "taskearn-zm",
+            storageBucket: "taskearn-zm.firebasestorage.app",
+            messagingSenderId: "723678925798",
+            appId: "1:723678925798:web:ef3ad7206556bee0a87c27"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // CPX Research config - replace 14669 with your real App ID from CPX
+        const CPX_APP_ID = "14669";
+        let currentUser = null;
+
+        // Auth state
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                document.getElementById("auth-section").classList.add("hidden");
+                document.getElementById("app-section").classList.remove("hidden");
+                document.getElementById("user-email").innerText = user.email;
+                loadBalance();
+                loadSurveys();
+            } else {
+                currentUser = null;
+                document.getElementById("auth-section").classList.remove("hidden");
+                document.getElementById("app-section").classList.add("hidden");
+            }
+        });
+
+        window.login = async () => {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                document.getElementById("auth-msg").innerText = "";
+            } catch (e) {
+                document.getElementById("auth-msg").innerText = e.message;
+            }
+        };
+
+        window.signup = async () => {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+            try {
+                const cred = await createUserWithEmailAndPassword(auth, email, password);
+                await setDoc(doc(db, "users", cred.user.uid), { balance: 0, email: email });
+                document.getElementById("auth-msg").innerText = "";
+            } catch (e) {
+                document.getElementById("auth-msg").innerText = e.message;
+            }
+        };
+
+        window.logout = () => signOut(auth);
+
+        // Tabs
+        window.showTab = (id) => {
+            document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+            document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
+            event.target.classList.add("active");
+            document.getElementById(id).classList.remove("hidden");
+            if (id === "surveys") loadSurveys();
+            if (id === "wallet") loadBalance();
+        };
+
+        // Load CPX Surveys
+        window.loadSurveys = () => {
+            if (!currentUser) return;
+            const container = document.getElementById("survey-container");
+            container.innerHTML = "";
+            
+            // CPX Research iframe
+            const iframe = document.createElement("iframe");
+            iframe.src = `https://wall.cpx-research.com/index.php?app_id=${CPX_APP_ID}&ext_user_id=${currentUser.uid}`;
+            iframe.style.width = "100%";
+            iframe.style.height = "600px";
+            iframe.style.border = "0";
+            iframe.setAttribute("allow", "clipboard-write");
+            container.appendChild(iframe);
+        };
+
+        // Balance + Withdraw
+        async function loadBalance() {
+            if (!currentUser) return;
+            const snap = await getDoc(doc(db, "users", currentUser.uid));
+            const bal = snap.exists() ? snap.data().balance || 0 : 0;
+            document.getElementById("balance").innerText = bal.toFixed(2);
+        }
+
+        window.withdraw = async () => {
+            const phone = document.getElementById("phone").value;
+            const amount = parseFloat(document.getElementById("amount").value);
+            const msg = document.getElementById("wd-msg");
+            
+            if (!phone.match(/^0(96|97|95|76|77)\d{7}$/)) {
+                msg.innerText = "Enter valid MTN/Airtel number"; msg.style.color = "red"; return;
+            }
+            if (amount < 10) {
+                msg.innerText = "Minimum withdrawal is K10"; msg.style.color = "red"; return;
+            }
+            
+            const userRef = doc(db, "users", currentUser.uid);
+            const snap = await getDoc(userRef);
+            const bal = snap.data().balance || 0;
+            
+            if (amount > bal) {
+                msg.innerText = "Insufficient balance"; msg.style.color = "red"; return;
+            }
+            
+            await updateDoc(userRef, { balance: increment(-amount) });
+            await setDoc(doc(db, "withdrawals", `${currentUser.uid}_${Date.now()}`), {
+                uid: currentUser.uid,
+                email: currentUser.email,
+                phone: phone,
+                amount: amount,
+                status: "pending",
+                timestamp: new Date()
+            });
+            
+            msg.innerText = "Withdrawal requested. Paid within 24hrs.";
+            msg.style.color = "green";
+            loadBalance();
+            document.getElementById("amount").value = "";
+        };
+
+        // CPX Postback listener - auto credit users
+        window.addEventListener("message", async (e) => {
+            if (e.data && e.data.status === "complete" && e.data.user_id && e.data.amount) {
+                const userRef = doc(db, "users", e.data.user_id);
+                await updateDoc(userRef, { balance: increment(parseFloat(e.data.amount)) });
+                if (currentUser && currentUser.uid === e.data.user_id) loadBalance();
+            }
+        });
+    </script>
+</body>
+</html>
