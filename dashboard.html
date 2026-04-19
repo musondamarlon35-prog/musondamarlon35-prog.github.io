@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskEarn ZM - Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        body { background: #f5f5f5; }
+        .header { background: #2E7D32; color: white; padding: 16px; text-align: center; position: relative; }
+        .tabs { display: flex; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .tab { flex: 1; padding: 16px; text-align: center; cursor: pointer; border-bottom: 3px solid transparent; }
+        .tab.active { border-bottom: 3px solid #2E7D32; color: #2E7D32; font-weight: 600; }
+        .tab-content { display: none; padding: 16px; }
+        .tab-content.active { display: block; }
+        .card { background: white; padding: 16px; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        #cpx-container { width: 100%; min-height: 600px; background: white; border-radius: 8px; }
+        .logout { position: absolute; top: 16px; right: 16px; background: #c62828; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>TaskEarn ZM</h1>
+        <p id="user-email">Loading...</p>
+        <button class="logout" onclick="logout()">Logout</button>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="openTab('home', this)">Home</div>
+        <div class="tab" onclick="openTab('surveys', this)">Surveys</div>
+        <div class="tab" onclick="openTab('withdraw', this)">Withdraw</div>
+    </div>
+
+    <!-- Home Tab -->
+    <div id="home" class="tab-content active">
+        <div class="card">
+            <h3>Your Balance</h3>
+            <h1 id="balance">0 Points</h1>
+            <p>$1.00 USD = 100 Points</p>
+        </div>
+        <div class="card">
+            <h3>Welcome to TaskEarn ZM</h3>
+            <p>Complete surveys in the Surveys tab to earn points. Withdrawals to MTN & Airtel Money coming soon.</p>
+        </div>
+    </div>
+
+    <!-- Surveys Tab -->
+    <div id="surveys" class="tab-content">
+        <div class="card">
+            <h3>Available Surveys</h3>
+            <p>Points are credited automatically when you finish a survey.</p>
+        </div>
+        <div id="cpx-container">
+            <p style="text-align:center; padding:40px; color:#666;">Loading surveys...</p>
+        </div>
+    </div>
+
+    <!-- Withdraw Tab -->
+    <div id="withdraw" class="tab-content">
+        <div class="card">
+            <h3>Withdraw Earnings</h3>
+            <p>Minimum withdrawal: 500 Points = $5.00</p>
+            <p>MTN & Airtel Money withdrawals will be added soon.</p>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        // 1. REPLACE WITH YOUR FIREBASE CONFIG FROM index.html
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // 2. Auth check + load CPX
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                document.getElementById('user-email').innerText = user.email;
+                loadCPX(user.uid);
+                loadBalance(user.uid);
+            } else {
+                window.location.href = 'index.html';
+            }
+        });
+
+        // 3. Load CPX Research - TaskEarn ZM App ID: 32566
+        function loadCPX(userId) {
+            const cpxScript = document.createElement('script');
+            cpxScript.src = "https://cdn.cpx-research.com/assets/js/script.js";
+            cpxScript.onload = function() {
+                new CPX({
+                    app_id: "32566",
+                    secure_hash: "Rus2RWwjOl", 
+                    user_id: userId,
+                    div_id: "cpx-container"
+                });
+            };
+            document.head.appendChild(cpxScript);
+        }
+
+        // 4. Load balance from Firestore
+        function loadBalance(uid) {
+            db.collection('users').doc(uid).onSnapshot((doc) => {
+                if (doc.exists) {
+                    const points = doc.data().balance || 0;
+                    document.getElementById('balance').innerText = points + ' Points';
+                } else {
+                    db.collection('users').doc(uid).set({ balance: 0, email: auth.currentUser.email });
+                }
+            });
+        }
+
+        // 5. Tabs
+        function openTab(tabName, element) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            element.classList.add('active');
+        }
+
+        // 6. Logout
+        function logout() {
+            auth.signOut();
+        }
+    </script>
+</body>
+</html>
